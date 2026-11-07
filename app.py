@@ -2,10 +2,12 @@ import html
 import json
 import os
 import re
+import time
 
 import streamlit as st
 from docx import Document
 from google import genai
+from google.genai import errors
 from google.genai import types
 from pypdf import PdfReader
 
@@ -60,20 +62,40 @@ def get_client():
     return genai.Client(api_key=key)
 
 
-MODEL = get_secret("GEMINI_MODEL", "gemini-3.8-flash")
+MODEL = get_secret("GEMINI_MODEL", "gemini-2.5-flash")
+# If the main model is busy, the app automatically tries these next
+MODELS = list(dict.fromkeys([MODEL, "gemini-2.5-flash", "gemini-2.5-flash-lite"]))
 
 
 def ask_json(prompt: str):
-    resp = get_client().models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json", temperature=0.4
-        ),
-    )
-    text = (resp.text or "").strip()
-    text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.MULTILINE).strip()
-    return json.loads(text)
+    """Call Gemini with retries (for 503 overload) and model fallback."""
+    last_err = None
+    for model in MODELS:
+        for attempt in range(3):
+            try:
+                resp = get_client().models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json", temperature=0.4
+                    ),
+                )
+                text = (resp.text or "").strip()
+                text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.MULTILINE).strip()
+                return json.loads(text)
+            except errors.APIError as e:
+                last_err = e
+                code = getattr(e, "code", None)
+                if code == 429:      # quota/rate limit: move to next model
+                    break
+                if code in (500, 503, 504):  # busy: wait and retry
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                raise                # other errors (bad key etc.) are real problems
+            except json.JSONDecodeError as e:
+                last_err = e         # model returned bad JSON: try again
+                continue
+    raise last_err
 
 
 def extract_text(uploaded) -> str:

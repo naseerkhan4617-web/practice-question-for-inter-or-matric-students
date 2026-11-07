@@ -62,7 +62,7 @@ def get_client():
     return genai.Client(api_key=key)
 
 
-MODEL = get_secret("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL = get_secret("GEMINI_MODEL", "gemini-3.8-flash")
 # If the main model is busy, the app automatically tries these next
 MODELS = list(dict.fromkeys([MODEL, "gemini-3.8-flash", "gemini-2.5-flash-lite"]))
 

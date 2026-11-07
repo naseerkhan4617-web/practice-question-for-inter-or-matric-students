@@ -64,7 +64,7 @@ def get_client():
 
 MODEL = get_secret("GEMINI_MODEL", "gemini-2.5-flash")
 # If the main model is busy, the app automatically tries these next
-MODELS = list(dict.fromkeys([MODEL, "gemini-2.5-flash", "gemini-2.5-flash-lite"]))
+MODELS = list(dict.fromkeys([MODEL, "gemini-3.8-flash", "gemini-2.5-flash-lite"]))
 
 
 def ask_json(prompt: str):
